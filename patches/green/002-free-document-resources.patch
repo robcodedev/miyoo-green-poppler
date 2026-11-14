@@ -1,0 +1,14 @@
+--- a/green.c
++++ b/green.c
+@@ -139,8 +139,11 @@
+ 	if (id < 0 || id >= rtd->doc_count || !rtd->docs[id])
+ 		return;
+ 	
++	if (rtd->docs[id]->cache.surface)
++		cairo_surface_destroy( rtd->docs[id]->cache.surface );
+ 	g_object_unref( G_OBJECT( rtd->docs[id]->doc ) );
+ 	free( rtd->docs[id]->search_str );
++	free( rtd->docs[id]->uri );
+ 	free( rtd->docs[id] );
+ 	rtd->docs[id] = NULL;
+ 	if (id < rtd->doc_count - 1)

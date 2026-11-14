@@ -1,0 +1,123 @@
+diff --git a/green.c b/green.c
+--- a/green.c
++++ b/green.c
+@@ -51,9 +51,9 @@
+ {
+ 	PopplerPage	*page;
+ 	
+ 	page = poppler_document_get_page( doc->doc, doc->page_cur );
+-	Green_GetDimension( page, scroll_w, scroll_h, Green_Fit( doc, w, h ) * doc->finescale, doc->rotation % 2 );
++	Green_GetDimension( page, scroll_w, scroll_h, Green_FitPage( doc, page, w, h ) * doc->finescale, doc->rotation % 2 );
+ 	g_object_unref( G_OBJECT( page ) );
+ 	if (*scroll_w < w)
+ 		*scroll_w = 0;
+ 	else	
+@@ -154,24 +154,22 @@
+ 	rtd->docs = realloc( rtd->docs, n * sizeof( *rtd->docs ) );
+ 	return;
+ }
+ 
+-double	Green_Fit( Green_Document *doc, int w, int h )
+-{
+-	PopplerPage	*page;
++/* Use an already-open PopplerPage where available.  Avoids acquiring
++ * the same page twice in rendering, scrolling and zoom operations. */
++double	Green_FitPage( Green_Document *doc, PopplerPage *page, int w, int h )
++{
+ 	double	pwidth, pheight, result = 1;
+-	
+-	if (doc->fit_method == NATURAL)
++
++	if (doc->fit_method == NATURAL || !page)
+ 		return 1;
+-	
+-	page = poppler_document_get_page( doc->doc, doc->page_cur );
+-	if (!page)
+-		return 1;
++
+ 	if (doc->rotation % 2)
+ 		poppler_page_get_size( page, &pheight, &pwidth );
+ 	else
+ 		poppler_page_get_size( page, &pwidth, &pheight );
+-	
++
+ 	if (pwidth > 0 && pheight > 0)
+ 	{
+ 		if (doc->fit_method == WIDTH)
+ 			result = w / pwidth;
+@@ -179,9 +177,24 @@
+ 			result = h / pheight;
+ 		else if (doc->fit_method == PAGE)
+ 			result = (w / pwidth <= h / pheight) ? w / pwidth : h / pheight;
+ 	}
+-	
++	return result;
++}
++
++double	Green_Fit( Green_Document *doc, int w, int h )
++{
++	PopplerPage *page;
++	double result;
++
++	if (doc->fit_method == NATURAL)
++		return 1;
++
++	page = poppler_document_get_page( doc->doc, doc->page_cur );
++	if (!page)
++		return 1;
++
++	result = Green_FitPage( doc, page, w, h );
+ 	g_object_unref( G_OBJECT( page ) );
+ 	return result;
+ }
+ 
+@@ -400,15 +413,16 @@
+ 
+ void	Green_Zoom( Green_Document *doc, int width, int height, double new_fs )
+ {
+ 	PopplerPage	*page;
+-	double	old_tscale, new_tscale;
++	double	old_tscale, new_tscale, fit_scale;
+ 	int	old_w, old_h, new_w, new_h;
+ 	
+ 	page = poppler_document_get_page( doc->doc, doc->page_cur );
+-	old_tscale = Green_Fit(doc, width, height) * doc->finescale;
++	fit_scale = Green_FitPage(doc, page, width, height);
++	old_tscale = fit_scale * doc->finescale;
+ 	doc->finescale = new_fs;
+-	new_tscale = Green_Fit(doc, width, height) * new_fs;
++	new_tscale = fit_scale * new_fs;
+ 	Green_GetDimension( page, &old_w, &old_h, old_tscale, doc->rotation % 2 );
+ 	Green_GetDimension( page, &new_w, &new_h, new_tscale, doc->rotation % 2 );
+ 	g_object_unref( G_OBJECT( page ) );
+ 	
+diff --git a/green.h b/green.h
+--- a/green.h
++++ b/green.h
+@@ -87,8 +87,9 @@
+ 
+ int	Green_Open( Green_RTD *rtd, char *uri );
+ void	Green_Close( Green_RTD *rtd, int id );
+ double	Green_Fit( Green_Document *doc, int width, int height );
++double	Green_FitPage( Green_Document *doc, PopplerPage *page, int width, int height );
+ void	Green_ScrollRelative( Green_Document *doc, int x, int y, int w, int h, int bb_flag );
+ void	Green_GetScrollRegion( Green_Document *doc, int w, int h, int *scroll_w, int *scroll_h );
+ void	Green_Zoom( Green_Document *doc, int width, int height, double new_fs );
+ int	Green_FindNext( Green_Document *doc, int start );
+diff --git a/sdl.c b/sdl.c
+--- a/sdl.c
++++ b/sdl.c
+@@ -407,10 +407,12 @@
+ 		return;
+ 	}
+ 	
+ 	doc = rtd->docs[rtd->doc_cur];
+-	tscale = Green_Fit( doc, display->w, display->h ) * doc->finescale;
+ 	page = poppler_document_get_page( doc->doc, doc->page_cur );
++	if (!page)
++		return;
++	tscale = Green_FitPage( doc, page, display->w, display->h ) * doc->finescale;
+ 	Green_GetDimension( page, &w, &h, tscale, doc->rotation % 2 );
+ 	rect.w = w > display->w ? display->w : w;
+ 	rect.h = h > display->h ? display->h : h;
+ 	rect.x = (display->w - rect.w) / 2;

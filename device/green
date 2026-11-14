@@ -1,0 +1,17 @@
+#!/bin/sh
+
+DIR="$(CDPATH= cd "$(dirname "$0")" && pwd)"
+
+# JPEG2000 optimization
+export GREEN_JPX_REDUCE=2
+unset GREEN_JPX_DEBUG
+
+# cache
+export GREEN_CACHE_PAGES=5
+export GREEN_CACHE_MB=12
+
+# Single-core Miyoo
+unset GREEN_JPX_THREADS
+
+# Launch Green, preserving all arguments
+exec "$DIR/green.bin" "$@"

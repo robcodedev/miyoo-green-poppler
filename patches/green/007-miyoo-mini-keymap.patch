@@ -1,0 +1,121 @@
+diff --git a/Makefile b/Makefile
+--- a/Makefile
++++ b/Makefile
+@@ -1,0 +2,5 @@
++
++# Set MIYOO=1 when cross-compiling for Miyoo Mini/Mini Plus (SDL 1.2).
++ifeq ($(MIYOO),1)
++CFLAGS	+=	-DGREEN_MIYOO_MINI
++endif
+diff --git a/sdl.c b/sdl.c
+--- a/sdl.c
++++ b/sdl.c
+@@ -571,10 +571,11 @@
+ 		case SDLK_F3:
+ 			f++;
+ 		case SDLK_F2:
+ 			f++;
+ 		case SDLK_F1:
++
+ 			if (!Green_IsDocValid( rtd, f ))
+ 				break;
+ 			
+ 			rtd->doc_cur = f;
+ 			*flags |= FLAG_RENDER;
+@@ -587,10 +588,78 @@
+ 			break;
+ 	}
+ 	
+ 	return state;
+ }
++
++#ifdef GREEN_MIYOO_MINI
++/* Miyoo Mini/Plus SDL 1.2 stock key map. Leave upstream keyboard controls
++ * unchanged when this build option is disabled. */
++static int MiyooInput( Green_RTD *rtd, SDLKey key, unsigned short *flags )
++{
++	Green_Document *doc;
++	SDL_Surface *display = SDL_GetVideoSurface();
++	int target;
++
++	/* MENU: return to the launcher, including when no document is open. */
++	if (key == SDLK_ESCAPE)
++	{
++		*flags |= FLAG_QUIT;
++		return 1;
++	}
++	if (!Green_IsDocValid( rtd, rtd->doc_cur ))
++		return 0;
++	doc = rtd->docs[rtd->doc_cur];
++
++	switch (key)
++	{
++		case SDLK_SPACE:       /* A: fit to width */
++			doc->fit_method = WIDTH;
++			doc->finescale = 1;
++			doc->xoffset = doc->yoffset = 0;
++			break;
++		case SDLK_LCTRL:       /* B: rotate clockwise */
++			Green_RotateRight( doc );
++			Green_ValidateOffset( doc, display->w, display->h );
++			break;
++		case SDLK_LSHIFT:      /* X: zoom in */
++			Green_Zoom( doc, display->w, display->h,
++				doc->finescale * rtd->zoomstep );
++			break;
++		case SDLK_LALT:        /* Y: zoom out */
++			Green_Zoom( doc, display->w, display->h,
++				doc->finescale / rtd->zoomstep );
++			break;
++		case SDLK_e:           /* L1: previous page */
++		case SDLK_t:           /* R1: next page */
++		case SDLK_TAB:         /* L2: back 10 pages */
++		case SDLK_BACKSPACE:   /* R2: forward 10 pages */
++			target = doc->page_cur;
++			if (key == SDLK_e) target--;
++			else if (key == SDLK_t) target++;
++			else if (key == SDLK_TAB) target -= 10;
++			else target += 10;
++			if (target < 0) target = 0;
++			if (target >= doc->page_count) target = doc->page_count - 1;
++			if (!Green_GotoPage( doc, target, true ))
++				return 1;
++			break;
++		case SDLK_RCTRL:       /* SELECT: vertical mirror */
++			Green_MirrorV( doc );
++			Green_ValidateOffset( doc, display->w, display->h );
++			break;
++		case SDLK_RETURN:      /* START: horizontal mirror */
++			Green_MirrorH( doc );
++			Green_ValidateOffset( doc, display->w, display->h );
++			break;
++		default:
++			return 0; /* D-pad and keyboard: upstream handling */
++	}
++	*flags |= FLAG_RENDER;
++	return 1;
++}
++#endif
+ 
+ Uint32	live_timer( Uint32 interval, void *param )
+ {
+ 	SDL_Event	event;
+ 	
+@@ -662,10 +731,17 @@
+ 			{
+ 				case SDL_QUIT:
+ 					flags |= FLAG_QUIT;
+ 					break;
+ 				case SDL_KEYDOWN:
++#ifdef GREEN_MIYOO_MINI
++					if (MiyooInput( rtd, event.key.keysym.sym, &flags ))
++					{
++						state = NORMAL;
++						break;
++					}
++#endif
+ 					if (event.key.keysym.sym == SDLK_ESCAPE)
+ 						state = NORMAL;
+ 					else if (event.key.keysym.sym == SDLK_RETURN)
+ 					{
+ 						if (!Green_IsDocValid( rtd, rtd->doc_cur ))

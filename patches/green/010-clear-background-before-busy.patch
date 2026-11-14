@@ -1,0 +1,62 @@
+--- a/sdl.c
++++ b/sdl.c
+@@ -236,15 +236,16 @@
+ 	SDL_FillRect(display, &box, dark);
+ 	dot.w = dot.h = 4;
+ 	dot.y = box.y + 8;
+ 	for (i = 0; i < 3; ++i) {
+ 		dot.x = box.x + 5 + 8 * i;
+ 		SDL_FillRect(display, &dot, light);
+ 	}
+-	SDL_UpdateRect(display, box.x, box.y, box.w, box.h);
++	/* Flush the background and indicator together in one full-screen update. */
++	SDL_UpdateRect(display, 0, 0, 0, 0);
+ }
+ 
+ void	RenderPage( Green_RTD *rtd, SDL_Rect dest, int xoff, int yoff, PopplerPage *page, double tscale )
+ {
+ 	PopplerRectangle	*rect;
+ 	Green_Document	*doc = rtd->docs[rtd->doc_cur];
+ 	SDL_Surface	*display = SDL_GetVideoSurface();
+@@ -543,15 +544,21 @@
+ 	tscale = Green_FitPage( doc, page, display->w, display->h ) * doc->finescale;
+ 	Green_GetDimension( page, &w, &h, tscale, doc->rotation % 2 );
+ 	rect.w = w > display->w ? display->w : w;
+ 	rect.h = h > display->h ? display->h : h;
+ 	rect.x = (display->w - rect.w) / 2;
+ 	rect.y = (display->h - rect.h) / 2;
+ 	if (!Green_CacheHit(doc, tscale))
++	{
++		/* Clear the previous app/page in the software surface before
++		 * showing the indicator. Green_ShowBusy publishes both together. */
++		SDL_FillRect(display, NULL, SDL_MapRGB(display->format,
++			rtd->c_background.r, rtd->c_background.g, rtd->c_background.b));
+ 		Green_ShowBusy(display);
++	}
+ 	screen.x = screen.y = 0;
+ 	screen.w = display->w;
+ 	screen.h = display->h;
+ 	SDL_FillRect(display, &screen, SDL_MapRGB(display->format,
+ 		rtd->c_background.r, rtd->c_background.g, rtd->c_background.b));
+ 	RenderPage( rtd, rect, doc->xoffset, doc->yoffset, page, tscale );
+ 	g_object_unref( G_OBJECT( page ) );
+@@ -838,14 +845,19 @@
+ 	
+ 	if (display->format->palette)
+ 	{
+ 		SDL_Quit();
+ 		fprintf( stderr, "Palettes are not supported!\n" );
+                 return 3;
+ 	}
++
++	/* Clear the previous application's framebuffer as soon as SDL video is ready. */
++	SDL_FillRect(display, NULL, SDL_MapRGB(display->format,
++		rtd->c_background.r, rtd->c_background.g, rtd->c_background.b));
++	SDL_UpdateRect(display, 0, 0, 0, 0);
+ 	
+ 	/* On a controller-only device, do not wake up 25 times a second.
+ 	 * Keep the timer for mouse-cursor timeout or edge scrolling. */
+ 	if (rtd->mouse.visibility > 0 || rtd->mouse.border_size)
+ 		timer = SDL_AddTimer( live_interval, live_timer, NULL );
+ 	mouse_last = SDL_GetTicks();
+ 	if (!rtd->mouse.visibility)

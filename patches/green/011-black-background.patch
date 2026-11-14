@@ -1,0 +1,13 @@
+--- a/main.c
++++ b/main.c
+@@ -896,7 +896,7 @@
+ 	rtd.doc_count = 0;
+ 	rtd.doc_cur = 0;
+-	rtd.c_background.r = 0x30;
+-	rtd.c_background.g = 0xD0;
+-	rtd.c_background.b = 0x30;
++	rtd.c_background.r = 0x00;
++	rtd.c_background.g = 0x00;
++	rtd.c_background.b = 0x00;
+ 	rtd.c_background.a = 0xFF;
+ 	rtd.c_highlight.r = 0x80;

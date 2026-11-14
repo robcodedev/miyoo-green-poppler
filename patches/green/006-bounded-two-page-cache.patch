@@ -1,0 +1,108 @@
+diff --git a/green.c b/green.c
+--- a/green.c
++++ b/green.c
+@@ -106,8 +106,11 @@
+ 	doc->bb = rtd->bb;
+ 	doc->cache.page = -1;
+ 	doc->cache.tscale = 0;
+ 	doc->cache.surface = NULL;
++	doc->previous.page = -1;
++	doc->previous.tscale = 0;
++	doc->previous.surface = NULL;
+ 	for (i = 0; i < rtd->doc_count; i++)
+ 	{
+ 		if (rtd->docs[i])
+ 			continue;
+@@ -140,8 +143,10 @@
+ 		return;
+ 	
+ 	if (rtd->docs[id]->cache.surface)
+ 		cairo_surface_destroy( rtd->docs[id]->cache.surface );
++	if (rtd->docs[id]->previous.surface)
++		cairo_surface_destroy( rtd->docs[id]->previous.surface );
+ 	g_object_unref( G_OBJECT( rtd->docs[id]->doc ) );
+ 	free( rtd->docs[id]->search_str );
+ 	free( rtd->docs[id]->uri );
+ 	free( rtd->docs[id] );
+diff --git a/green.h b/green.h
+--- a/green.h
++++ b/green.h
+@@ -60,1 +60,2 @@
+-	Green_PageBuffer	cache;
++	Green_PageBuffer	cache;
++	Green_PageBuffer	previous;	/* second, memory-budgeted rendered page */
+diff --git a/sdl.c b/sdl.c
+--- a/sdl.c
++++ b/sdl.c
+@@ -141,8 +141,21 @@
+ 			break;
+ 	}
+ }
+ 
++
++/* Two-page LRU cache, with a strict 6 MiB limit on retained Cairo buffers.
++ * The current page always remains cached, even if it exceeds the budget. */
++#define GREEN_CACHE_LIMIT (6u * 1024u * 1024u)
++
++static size_t Green_SurfaceBytes( cairo_surface_t *surface )
++{
++	if (!surface || cairo_surface_get_type( surface ) != CAIRO_SURFACE_TYPE_IMAGE)
++		return 0;
++	return (size_t)cairo_image_surface_get_stride( surface ) *
++		(size_t)cairo_image_surface_get_height( surface );
++}
++
+ void	RenderPage( Green_RTD *rtd, SDL_Rect dest, int xoff, int yoff, PopplerPage *page, double tscale )
+ {
+ 	PopplerRectangle	*rect;
+ 	Green_Document	*doc = rtd->docs[rtd->doc_cur];
+@@ -164,12 +177,28 @@
+ 		list = poppler_page_find_text( page, doc->search_str );
+ 
+ 	if (doc->cache.surface && doc->cache.page == doc->page_cur && doc->cache.tscale == tscale)
+ 		surface = doc->cache.surface;
++	else if (doc->previous.surface && doc->previous.page == doc->page_cur &&
++		doc->previous.tscale == tscale)
++	{
++		/* Revisit the recently displayed page without asking Poppler to render. */
++		Green_PageBuffer tmp = doc->cache;
++		doc->cache = doc->previous;
++		doc->previous = tmp;
++		surface = doc->cache.surface;
++	}
+ 	else
+ 	{
+ 		Green_GetDimension( page, &w, &h, tscale, false );
+ 		surface = cairo_image_surface_create( CAIRO_FORMAT_ARGB32, w, h );
++		if (cairo_surface_status( surface ) != CAIRO_STATUS_SUCCESS)
++		{
++			cairo_surface_destroy( surface );
++			if (list)
++				g_list_free( list );
++			return;
++		}
+ 		context = cairo_create( surface );
+ 		cairo_save( context );
+ 		cairo_scale( context, tscale, tscale );
+ 		poppler_page_render( page, context );
+@@ -177,9 +206,19 @@
+ 		cairo_set_operator( context, CAIRO_OPERATOR_DEST_OVER );
+ 		cairo_set_source_rgb( context, 1., 1., 1. );
+ 		cairo_paint( context );
+ 		cairo_destroy( context );
+-		if (doc->cache.surface)
++
++		if (doc->previous.surface)
++			cairo_surface_destroy( doc->previous.surface );
++		doc->previous.surface = NULL;
++		doc->previous.page = -1;
++		if (doc->cache.surface &&
++			Green_SurfaceBytes( doc->cache.surface ) <= GREEN_CACHE_LIMIT &&
++			Green_SurfaceBytes( surface ) <=
++				GREEN_CACHE_LIMIT - Green_SurfaceBytes( doc->cache.surface ))
++			doc->previous = doc->cache;
++		else if (doc->cache.surface)
+ 			cairo_surface_destroy( doc->cache.surface );
+ 
+ 		doc->cache.surface = surface;
+ 		doc->cache.page = doc->page_cur;

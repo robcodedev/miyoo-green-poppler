@@ -1,0 +1,20 @@
+# Generated downloads and build products (keep modified Green/Poppler source tracked)
+/build-deps/
+/openjpeg-arm/
+/openjpeg-2.4.0/
+/*.tar.gz
+/*.tar.xz
+/green/green
+/green/*.o
+/green/*.d
+/green/*.so
+/poppler-0.84.0/build*/
+/poppler-0.84.0/*.o
+/poppler-0.84.0/*.so
+/poppler-0.84.0/*.so.*
+/poppler-0.84.0/CMakeFiles/
+/poppler-0.84.0/CMakeCache.txt
+*.swp
+*~
+__pycache__/
+.DS_Store

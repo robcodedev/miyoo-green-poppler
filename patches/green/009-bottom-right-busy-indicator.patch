@@ -1,0 +1,68 @@
+--- a/sdl.c
++++ b/sdl.c
+@@ -216,6 +216,31 @@
+ 		doc->recent[i] = doc->recent[i - 1];
+ 	doc->recent[0] = doc->cache;
+ 	doc->cache = found;
++}
++
++/* Small three-dot indication drawn before a slow uncached page is rendered.
++ * It will be cleared by the normal full-frame update after rendering. */
++static void Green_ShowBusy(SDL_Surface *display)
++{
++	SDL_Rect box, dot;
++	Uint32 dark, light;
++	int i;
++	if (!display || display->w < 40 || display->h < 30)
++		return;
++	box.w = 29;
++	box.h = 20;
++	box.x = display->w - box.w - 5;
++	box.y = display->h - box.h - 5;
++	dark = SDL_MapRGB(display->format, 20, 20, 20);
++	light = SDL_MapRGB(display->format, 235, 235, 235);
++	SDL_FillRect(display, &box, dark);
++	dot.w = dot.h = 4;
++	dot.y = box.y + 8;
++	for (i = 0; i < 3; ++i) {
++		dot.x = box.x + 5 + 8 * i;
++		SDL_FillRect(display, &dot, light);
++	}
++	SDL_UpdateRect(display, box.x, box.y, box.w, box.h);
+ }
+ 
+ void	RenderPage( Green_RTD *rtd, SDL_Rect dest, int xoff, int yoff, PopplerPage *page, double tscale )
+@@ -496,16 +521,17 @@
+ 	Green_Document	*doc;
+ 	PopplerPage	*page = NULL;
+ 	SDL_Surface	*display = SDL_GetVideoSurface();
+-	SDL_Rect	rect;
++	SDL_Rect	rect, screen;
+ 	double	tscale;
+ 	int	w, h;
+ 	
+ 	rect.x = rect.y = 0;
+ 	rect.w = display->w;
+ 	rect.h = display->h;
+-	SDL_FillRect( display, &rect, SDL_MapRGB( display->format, rtd->c_background.r, rtd->c_background.g, rtd->c_background.b ));
+ 	if (!Green_IsDocValid( rtd, rtd->doc_cur ))
+ 	{
++		SDL_FillRect(display, &rect, SDL_MapRGB(display->format,
++			rtd->c_background.r, rtd->c_background.g, rtd->c_background.b));
+ 		SDL_UpdateRect( display, 0, 0, 0, 0 );
+ 		return;
+ 	}
+@@ -520,6 +546,13 @@
+ 	rect.h = h > display->h ? display->h : h;
+ 	rect.x = (display->w - rect.w) / 2;
+ 	rect.y = (display->h - rect.h) / 2;
++	if (!Green_CacheHit(doc, tscale))
++		Green_ShowBusy(display);
++	screen.x = screen.y = 0;
++	screen.w = display->w;
++	screen.h = display->h;
++	SDL_FillRect(display, &screen, SDL_MapRGB(display->format,
++		rtd->c_background.r, rtd->c_background.g, rtd->c_background.b));
+ 	RenderPage( rtd, rect, doc->xoffset, doc->yoffset, page, tscale );
+ 	g_object_unref( G_OBJECT( page ) );
+ 	SDL_UpdateRect( display, 0, 0, 0, 0 );

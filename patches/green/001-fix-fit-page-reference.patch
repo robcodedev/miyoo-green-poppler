@@ -1,0 +1,43 @@
+--- a/green.c
++++ b/green.c
+@@ -155,25 +155,31 @@
+ double	Green_Fit( Green_Document *doc, int w, int h )
+ {
+ 	PopplerPage	*page;
+-	double	pwidth, pheight;
++	double	pwidth, pheight, result = 1;
+ 	
+ 	if (doc->fit_method == NATURAL)
+ 		return 1;
+ 	
+ 	page = poppler_document_get_page( doc->doc, doc->page_cur );
++	if (!page)
++		return 1;
+ 	if (doc->rotation % 2)
+ 		poppler_page_get_size( page, &pheight, &pwidth );
+ 	else
+ 		poppler_page_get_size( page, &pwidth, &pheight );
+ 	
+-	if (doc->fit_method == WIDTH)
+-		return w / pwidth;
+-	else if (doc->fit_method == HEIGHT)
+-		return h / pheight;
+-	else if (doc->fit_method == PAGE)
+-		return (w / pwidth <= h / pheight) ? w / pwidth : h / pheight;
+-	
+-	return 1;
++	if (pwidth > 0 && pheight > 0)
++	{
++		if (doc->fit_method == WIDTH)
++			result = w / pwidth;
++		else if (doc->fit_method == HEIGHT)
++			result = h / pheight;
++		else if (doc->fit_method == PAGE)
++			result = (w / pwidth <= h / pheight) ? w / pwidth : h / pheight;
++	}
++	
++	g_object_unref( G_OBJECT( page ) );
++	return result;
+ }
+ 
+ void	Green_ScrollRelative( Green_Document *doc, int x, int y, int w, int h, int bb_flag )

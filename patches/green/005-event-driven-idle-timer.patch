@@ -1,0 +1,28 @@
+diff --git a/sdl.c b/sdl.c
+--- a/sdl.c
++++ b/sdl.c
+@@ -706,9 +706,12 @@
+ 		fprintf( stderr, "Palettes are not supported!\n" );
+                 return 3;
+ 	}
+ 	
+-	timer = SDL_AddTimer( live_interval, live_timer, NULL );
++	/* On a controller-only device, do not wake up 25 times a second.
++	 * Keep the timer for mouse-cursor timeout or edge scrolling. */
++	if (rtd->mouse.visibility > 0 || rtd->mouse.border_size)
++		timer = SDL_AddTimer( live_interval, live_timer, NULL );
+ 	mouse_last = SDL_GetTicks();
+ 	if (!rtd->mouse.visibility)
+ 		SDL_ShowCursor( SDL_DISABLE );
+ 	
+@@ -974,8 +977,9 @@
+ 		}	while (event_count && SDL_PollEvent( &event ));
+ 		
+ 	}	while (!(flags&FLAG_QUIT));
+ 	
+-	SDL_RemoveTimer( timer );
++	if (timer)
++		SDL_RemoveTimer( timer );
+ 	SDL_Quit();
+ 	return 0;
+ }
